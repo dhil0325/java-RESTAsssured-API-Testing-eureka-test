@@ -1,6 +1,9 @@
 package org.example;
 
+import com.aventstack.extentreports.ExtentReports;
+import com.aventstack.extentreports.ExtentTest;
 import com.aventstack.extentreports.Status;
+import com.aventstack.extentreports.reporter.ExtentHtmlReporter;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -11,30 +14,54 @@ import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 import jdk.jfr.Category;
 import org.testng.Assert;
-import org.testng.annotations.BeforeSuite;
-import org.testng.annotations.Test;
+import org.testng.ITestResult;
+import org.testng.annotations.*;
 
 import java.util.List;
 import java.util.Map;
 
 import static io.restassured.path.json.JsonPath.from;
 import static io.restassured.path.json.JsonPath.given;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.*;
 
 public class APIGet {
     private Response response;
+    private ExtentReports extent;
+    private ExtentTest test;
    @BeforeSuite
    // 1. Send a GET request to retrieve the product details
     public void sendGetRequest() {
        RestAssured.baseURI = "https://run.mocky.io";
        response = RestAssured.given().when().get("/v3/0e2de2af-4793-4c89-af96-bdc1d52e9212");
+       ExtentHtmlReporter htmlReporter = new ExtentHtmlReporter("test-output/ExtentReport.html");
+       extent = new ExtentReports();
+       extent.attachReporter(htmlReporter);
    }
+
+    @BeforeMethod
+    public void setup() {
+        test = extent.createTest(getClass().getSimpleName());
+    }
+
+    @AfterMethod
+    public void tearDown(ITestResult result) {
+        if (result.getStatus() == ITestResult.FAILURE) {
+            test.fail(result.getThrowable());
+        } else if (result.getStatus() == ITestResult.SKIP) {
+            test.skip("Test skipped: " + result.getThrowable());
+        }
+    }
+
+    @AfterSuite
+    public void afterSuite() {
+        extent.flush();
+    }
 
    //2. Validate that the response has a status code 200
     @Test(priority = 1)
     public void testGetProductDetail() {
            Assert.assertEquals(response.getStatusCode(), 200, "Invalid status code");
+
    }
 
     //3. Verify that the "name" field in the response matches the expected value "ProductX"
@@ -44,6 +71,7 @@ public class APIGet {
        String actualName = response.jsonPath().getString("name");
 
        Assert.assertEquals(actualName, expectedName,"Product name doesn't match with expected val");
+
     }
 
     //4. Check if the "price" field is numeric value and greater than zero
@@ -54,6 +82,7 @@ public class APIGet {
         Double price = jsonPath.getDouble("price");
         Assert.assertTrue(jsonPath.get("price") !=null, "Price field is missing");
         Assert.assertTrue(price > 0, "Price is not greater than zero");
+
     }
 
     //5. Validate that the "inventory" field is present and has a boolean values for "available"
@@ -67,6 +96,7 @@ public class APIGet {
         Assert.assertTrue(invetoryObject.has("available"), "Available is no present");
         boolean isAvailable = invetoryObject.get("available").getAsBoolean();
         Assert.assertTrue(isAvailable, "'available' value is not 'true'");
+
     }
 
     //6. Extract the "quantity" value from the "inventory" field and verify that it is a numeric value greater than zero
@@ -77,6 +107,7 @@ public class APIGet {
        Integer quantityVal = jsonPath.getInt("inventory.quantity");
        Assert.assertNotNull(quantityVal, "Quantity Value is Null");
        Assert.assertTrue(quantityVal > 0, "Quantity Value Greater Than Zero");
+
     }
 
     //7. Verify that the "categories" field contains at least one category and each category has an "id" and a "name" field
@@ -92,17 +123,23 @@ public class APIGet {
            Assert.assertNotNull(category.get("id"), "Category id is missing");
            Assert.assertNotNull(category.get("name"), "Category name is missing");
        }
+
     }
 
     //8. Extract the "reviews" field and ensure it is an array containing at least one review
     @Test(priority = 7)
     public void testReviewFieldPresenceAndArraySize(){
-    String responseBody = response.then().extract().response().getBody().asString();
-    JsonParser jsonParser = new JsonParser();
-    JsonObject jsonObject = jsonParser.parse(responseBody).getAsJsonObject();
-    Assert.assertTrue(jsonObject.has("reviews"), "Review field is not present in the JSON response");
-    JsonArray reviewsArray = jsonObject.getAsJsonArray("review");
-    Assert.assertTrue(reviewsArray.size() > 0, "The reviews  array doesnot contain any review");
+       response.then().assertThat().contentType("application/json")
+               .body("reviews", notNullValue())
+               .body("reviews", instanceOf(List.class))
+               .body("reviews", hasSize(greaterThan(0)));
+
+//    String responseBody = response.then().extract().response().getBody().asString();
+//    JsonParser jsonParser = new JsonParser();
+//    JsonObject jsonObject = jsonParser.parse(responseBody).getAsJsonObject();
+//    Assert.assertTrue(jsonObject.has("reviews"), "Review field is not present in the JSON response");
+//    JsonArray reviewsArray = jsonObject.getAsJsonArray("review");
+//    Assert.assertTrue(reviewsArray.size() > 0, "The reviews  array doesnot contain any review");
 
     }
 
